@@ -1,21 +1,14 @@
 export default {
   async fetch(request, env) {
+    // --- API ключ из секретов окружения ---
     const HELIUS_API_KEY = env.HELIUS_API_KEY;
-    const CORS_ALLOW_ORIGIN = env.CORS_ALLOW_ORIGIN;
 
-    // --- CORS headers ---
-    const supportedDomains = CORS_ALLOW_ORIGIN ? CORS_ALLOW_ORIGIN.split(',') : undefined;
+    // --- CORS headers для всех ---
     const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, x-client-secret",
     };
-
-    const origin = request.headers.get('Origin');
-    if (supportedDomains && origin && supportedDomains.includes(origin)) {
-      corsHeaders['Access-Control-Allow-Origin'] = origin;
-    } else {
-      corsHeaders['Access-Control-Allow-Origin'] = '*';
-    }
 
     // --- OPTIONS preflight ---
     if (request.method === "OPTIONS") {
@@ -32,12 +25,15 @@ export default {
       });
     }
 
-    // --- Regular HTTP RPC ---
+    // --- Regular HTTP/JSON RPC ---
     const { pathname, search } = new URL(request.url);
     const payload = await request.text();
+
+    // Определяем хост Helius
     const heliusHost = pathname === '/' ? 'mainnet.helius-rpc.com' : 'api.helius.xyz';
     const heliusUrl = `https://${heliusHost}${pathname}${search || ''}`;
 
+    // --- Формируем прокси-запрос с ключом в заголовке ---
     const proxyRequest = new Request(heliusUrl, {
       method: request.method,
       body: payload || null,
@@ -48,8 +44,10 @@ export default {
       },
     });
 
+    // Отправляем запрос на Helius
     const res = await fetch(proxyRequest);
 
+    // --- Добавляем CORS к ответу ---
     const responseHeaders = new Headers(res.headers);
     Object.entries(corsHeaders).forEach(([key, value]) => {
       responseHeaders.set(key, value);
